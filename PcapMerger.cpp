@@ -178,11 +178,6 @@ void PcapMerger::check_files(char** files, int quantity)
 		catch(MyException ex){}
 		f.close();
 	}
-	//for(std::set<std::string>::iterator it = filesByEnd[0].files.begin(); it != filesByEnd[0].files.end(); ++it)
-	//	std::cout << 1 << *it << std::endl;
-	//for(std::set<std::string>::iterator it = filesByEnd[1].files.begin(); it != filesByEnd[1].files.end(); ++it)
-	//	std::cout << 2 << *it << std::endl;
-	//std::cout << filesByEnd[0].size << " " << filesByEnd[1].size << std::endl;
 }
 
 void PcapMerger::merge_files()
