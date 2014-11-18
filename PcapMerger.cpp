@@ -5,7 +5,7 @@
 #include"set"
 #include"vector"
 #include"algorithm"
-#include<sys/stat.h>
+#include"sys/stat.h"
 #include"sstream"
 
 void swap(char* str, int size)
@@ -85,13 +85,13 @@ typedef std::map<unsigned int, std::auto_ptr<Format>> myMap;
 class MyException
 {
 public:
-	MyException(char *s)
+	MyException(std::string &s)
 	{
 		std::cout << "File " << s << " is not a pcap file in a supported format" << std::endl;
 		term();
 	}
 
-	MyException(char *s, std::string t)
+	MyException(std::string &s, std::string t)
 	{
 		std::cout << "File " << s << " has " << t << " format, not compatable with the other files" << std::endl;
 		term();
@@ -110,11 +110,11 @@ private:
 
 	int gHeadSize, frHeadSize;
 	void create_dictionary();
-	void check_files(char**, int);
+	void check_files(std::vector<std::string>&, int);
 	void merge_files();
 	void add_to_file(const std::string&, char, char, char);
 public:
-	PcapMerger(char** files, int quantity, char* output): outputFile(output), gHeadSize(24)
+	PcapMerger(std::vector<std::string> &files, int quantity, std::string output): outputFile(output), gHeadSize(24)
 	{
 		out.exceptions(std::ofstream::failbit | std::ofstream::badbit | std::ofstream::eofbit);
 		f.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
@@ -138,13 +138,13 @@ void PcapMerger::create_dictionary()
 	typesDict.insert(myPair (0x12cbe2a1, new Format("netsniff-ng", "444422211", 1, 24)));
 }
 
-void PcapMerger::check_files(char** files, int quantity)
+void PcapMerger::check_files(std::vector<std::string> &files, int quantity)
 {
 	HexAccess val;
 	char buf[4];
 	short mNumberLength = 4;
 	struct stat fstatus;
-	for(int i = 1; i <= quantity; ++i)
+	for(int i = 0; i < quantity; ++i)
 	{
 		try
 		{
@@ -155,7 +155,7 @@ void PcapMerger::check_files(char** files, int quantity)
 			if(typesDict.count(val.get_int()) == 0)
 				throw new MyException(files[i]);
 			
-			if(i == 1)
+			if(i == 0)
 			{
 				pcapFormat = typesDict[val.get_int()]->type;
 				frHeadSize = typesDict[val.get_int()]->size;
@@ -165,7 +165,7 @@ void PcapMerger::check_files(char** files, int quantity)
 			if(typesDict[val.get_int()]->type != pcapFormat)
 				throw new MyException(files[i], typesDict[val.get_int()]->type);
 			
-			stat(files[i], &fstatus);
+			stat(files[i].c_str(), &fstatus);
 
 			filesByEnd[typesDict[val.get_int()]->subtype].files.insert(files[i]);
 			filesByEnd[typesDict[val.get_int()]->subtype].size += fstatus.st_size;
@@ -259,7 +259,34 @@ void PcapMerger::add_to_file(const std::string& from, char pos, char form, char 
 
 int main(int argc, char* argv[])
 {
-	char* out = "merged.cap";
-	std::auto_ptr<PcapMerger> Mrg(new PcapMerger(argv, argc - 1, out));
+	char headSet = 0, cnt = 0;
+	std::vector<std::string> files;
+	std::string tmp, out;
+	for(int i = 1; i < argc; ++i)
+	{
+		if(strcmp(argv[i], "-o") == 0)
+		{
+			if(i == argc - 1)
+			{
+				std::cout << "Using default output file name \"merged.pcap\"";
+				out = "merged.pcap";
+				headSet = 1;
+				break;
+			}
+			headSet = 1;
+			out = argv[++i];
+			continue;
+		}
+		
+		tmp = argv[i];
+		files.push_back(tmp);
+		cnt++;
+	}
+	if(headSet == 0)
+	{
+		std::cout << "Using default output file name \"merged.pcap\"";
+		out = "merged.pcap";
+	}
+	std::auto_ptr<PcapMerger> Mrg(new PcapMerger(files, cnt, out));
 	return 0;
 }
