@@ -7,20 +7,30 @@
 #include"algorithm"
 #include"sys/stat.h"
 
+void term()
+{
+	std::cout << "Press Enter to exit...";
+	std::cin.get();
+	exit(-1);
+}
+
 class FileHandler
 {
 private:
 	std::fstream stream;
+	std::string name;
 public:
 	FileHandler()
 	{
 		stream.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit | 
 						  std::ofstream::failbit | std::ofstream::badbit | std::ofstream::eofbit);
 	}
+
 	void open(std::string fName, char* mod)
 	{
 		try
 		{
+			name = fName;
 			if(!strcmp(mod, "rd"))
 			{
 				stream.open(fName, std::ios::in | std::ios::binary);
@@ -36,7 +46,8 @@ public:
 		}
 		catch(std::fstream::failure)
 		{
-			std::cout << "An error occurred during file opening" << std::endl;
+			std::cout << "An error occurred during opening " << name << std::endl;
+			term();
 		}
 	}
 
@@ -47,25 +58,19 @@ public:
 			if(stream.peek() != EOF)
 			{
 				if(stream.is_open())
-				{
 					stream.read(buf, size);
-				}
 				else
-				{
 					not_open();
-				}
 				return 1;
 			}
 		}
 		catch(std::ifstream::failure fail)
 		{
 			if(!stream.fail())
-			{
 				return 0;
-			}
 			else
 			{
-				std::cout << "An error occurred during file reading: " << fail.what() << std::endl;
+				std::cout << "File " << name << " ended abruptly, possible loss of data\n";
 				return 0;
 			}
 		}
@@ -76,13 +81,9 @@ public:
 		try
 		{
 			if(stream.is_open())
-			{
 				stream.write(buf, size);
-			}
 			else
-			{
 				not_open();
-			}
 		}
 		catch(std::ofstream::failure fail)
 		{
@@ -102,6 +103,11 @@ public:
 		}
 	}
 
+	int data_q(int to_read)
+	{
+		return (int)stream.tellg() + to_read - length();
+	}
+
 	void close()
 	{
 		if(stream.is_open())
@@ -112,6 +118,15 @@ public:
 		not_open();
 	}
 
+	int length()
+	{
+		int pos = stream.tellg(), length;
+		stream.seekg (0, stream.end);
+		length = stream.tellg();
+		stream.seekg (pos, stream.beg);
+		return length;
+	}
+
 	int peek()
 	{
 		return stream.peek();
@@ -119,9 +134,7 @@ public:
 
 	bool good()
 	{
-		if(!stream.good())
-			return 0;
-		return 1;
+		return stream.good();
 	}
 
 	void not_open()
@@ -154,13 +167,6 @@ void swap_frame(char *str, int h_size, std::string parts)
 void dummy(char*, int){}
 
 void dummy_frame(char*, int, std::string){}
-
-void term()
-{
-	std::cout << "Press Enter to exit...";
-	std::cin.get();
-	exit(-1);
-}
 
 union HexAccess
 {
@@ -325,8 +331,8 @@ void PcapMerger::merge_files()
 
 void PcapMerger::add_to_file(const std::string& from, char pos, char form, char sw)
 {
-	int packetSize = 0, count = 0, res = 1;
-	char *headerBuf, *packBuf;
+	int packetSize = 0, count = 0;
+	char *headerBuf, *packBuf, res = 1;
 	HexAccess hack;
 	void (*mod_pckt_sz)(char *, int);
 	void (*mod_frm)(char *, int, std::string);
@@ -334,7 +340,6 @@ void PcapMerger::add_to_file(const std::string& from, char pos, char form, char 
 	mod_pckt_sz = (form == sw? swap: dummy);
 	mod_frm = (sw == 0? dummy_frame: swap_frame);
 	f->open(from, "rd");
-
 	if(pos == 0)
 	{
 		headerBuf = new char[gHeadSize];
@@ -345,8 +350,7 @@ void PcapMerger::add_to_file(const std::string& from, char pos, char form, char 
 	else
 		f->seekg(gHeadSize, std::ios::beg);
 	headerBuf = new char[frHeadSize];
-
-	while(1)
+	while(f->good())
 	{
 		res = f->read(headerBuf, frHeadSize);
 		if(!res)
@@ -357,8 +361,12 @@ void PcapMerger::add_to_file(const std::string& from, char pos, char form, char 
 		mod_pckt_sz(headerBuf + 8, 4);
 		hack.set_ch(headerBuf + 8);
 		packetSize = hack.get_int();
+
+		if(f->data_q(packetSize) > 0)
+			packetSize -= f->data_q(packetSize);
+
 		packBuf = new char[packetSize];
-		f->read(packBuf, packetSize);
+		res = f->read(packBuf, packetSize);
 		out->write(packBuf, packetSize);
 		delete[] packBuf;
 	}
