@@ -6,7 +6,93 @@
 #include"vector"
 #include"algorithm"
 #include"sys/stat.h"
-#include"sstream"
+
+class File
+{
+private:
+	std::ifstream from;
+	std::ofstream wrt;
+public:
+	File()
+	{
+		from.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+		wrt.exceptions(std::ofstream::failbit | std::ofstream::badbit | std::ofstream::eofbit);
+	}
+	void open(std::string fName, char mod)
+	{
+		try
+		{
+			if(mod == 'r')
+				from.open(fName, std::ios::binary);
+			if(mod == 'w')
+				wrt.open(fName, std::ios::binary);
+			else
+				std::cout << "Unknown mode, \'r\' & \'w\' are known\n";
+		}
+		catch(std::fstream::failure)
+		{
+			std::cout << "An error occurred during file opening" << std::endl;
+		}
+	}
+
+	void read(char * buf, unsigned int size)
+	{
+		try
+		{
+			if(from.is_open())
+			{
+				from.read(buf, size);
+			}
+			else
+			{
+				not_open();
+			}
+		}
+		catch(std::ifstream::failure fail)
+		{
+			std::cout << "An error occurred during file reading: " << fail.what() << std::endl;
+		}
+	}
+
+	void write(char * buf, unsigned int size)
+	{
+		try
+		{
+			if(wrt.is_open())
+			{
+				wrt.write(buf, size);
+			}
+			else
+			{
+				not_open();
+			}
+		}
+		catch(std::ofstream::failure fail)
+		{
+			std::cout << "An error occurred during file writing: " << fail.what() << std::endl;
+		}
+	}
+
+	void close()
+	{
+		this->~File();
+	}
+
+	void not_open()
+	{
+		std::cout << "File wasnt open correctly\n";
+	}
+
+	~File()
+	{
+		if(from.is_open())
+			from.close();
+		if(wrt.is_open())
+			wrt.close();
+		else
+			not_open();
+	}
+};
 
 void swap(char* str, int size)
 {
@@ -277,7 +363,6 @@ int main(int argc, char* argv[])
 			out = argv[++i];
 			continue;
 		}
-		
 		tmp = argv[i];
 		files.push_back(tmp);
 		cnt++;
@@ -287,6 +372,7 @@ int main(int argc, char* argv[])
 		std::cout << "Using default output file name \"merged.pcap\"";
 		out = "merged.pcap";
 	}
+	
 	std::auto_ptr<PcapMerger> Mrg(new PcapMerger(files, cnt, out));
 	return 0;
 }
