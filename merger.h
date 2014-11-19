@@ -12,24 +12,9 @@
 void term();
 void swap(char* str, int size);
 
-class MyException
-{
-public:
-	MyException(std::string &s)
-	{
-		std::cout << "File " << s << " is not a pcap file in a supported format" << std::endl;
-		term();
-	}
-
-	MyException(std::string &s, std::string t)
-	{
-		std::cout << "File " << s << " has " << t << " format, not compatable with the other files" << std::endl;
-		term();
-	}
-};
-
 struct Format
 {
+public:
 	std::string type, format;
 	char subtype;
 	int size;
@@ -46,19 +31,24 @@ private:
 	unsigned int intVal;
 public:
 	HexAccess(){}
-
 	void set_ch(char *c){strncpy(charVal, c, 4);}
-
 	int get_int(){return intVal;}
-
 	char* get_ch(){return charVal;}
 };
 
 struct FilesAndSize
 {
+public:
 	std::set<std::string> files;
 	long long size;
 	FilesAndSize(): size(0){}
+};
+
+class MyException
+{
+public:
+	MyException(std::string &s);
+	MyException(std::string &s, std::string t);
 };
 
 class PcapMerger

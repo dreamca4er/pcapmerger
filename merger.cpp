@@ -31,6 +31,18 @@ void term()
 	exit(-1);
 }
 
+MyException::MyException(std::string &s)
+{
+	std::cout << "File " << s << " is not a pcap file in a supported format" << std::endl;
+	term();
+}
+
+MyException::MyException(std::string &s, std::string t)
+{
+	std::cout << "File " << s << " has " << t << " format, not compatable with the other files" << std::endl;
+	term();
+}
+
 PcapMerger::PcapMerger(std::vector<std::string> &files, int quantity, std::string output)
 {
 	outputFile = output;
@@ -104,13 +116,10 @@ void PcapMerger::merge_files()
 		add_to_file(*it, 0, form, 0);
 		++it;
 		for(it; it != filesByEnd[form].files.end(); ++it)
-		{
 			add_to_file(*it, 1, form, 0);
-		}
+		
 		for(it = filesByEnd[!form].files.begin(); it != filesByEnd[!form].files.end(); ++it)
-		{
 			add_to_file(*it, 1, !form, 1);
-		}
 	}
 	catch(MyException ex){}
 	out->close();

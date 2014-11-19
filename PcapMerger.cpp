@@ -9,6 +9,11 @@ int main(int argc, char* argv[])
 	char headSet = 0, cnt = 0;
 	std::vector<std::string> files;
 	std::string tmp, out;
+	if(argc == 1)
+	{
+		std::cout << "Usage: file_1 [[file_2]...[file_n]] -o output_file\n";
+		exit(-1);
+	}
 	for(int i = 1; i < argc; ++i)
 	{
 		if(strcmp(argv[i], "-o") == 0)
