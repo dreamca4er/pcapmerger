@@ -7,25 +7,30 @@
 #include"algorithm"
 #include"sys/stat.h"
 
-class File
+class FileHandler
 {
 private:
-	std::ifstream from;
-	std::ofstream wrt;
+	std::fstream stream;
 public:
-	File()
+	FileHandler()
 	{
-		from.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
-		wrt.exceptions(std::ofstream::failbit | std::ofstream::badbit | std::ofstream::eofbit);
+		stream.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit | 
+						  std::ofstream::failbit | std::ofstream::badbit | std::ofstream::eofbit);
 	}
-	void open(std::string fName, char mod)
+	void open(std::string fName, char* mod)
 	{
 		try
 		{
-			if(mod == 'r')
-				from.open(fName, std::ios::binary);
-			if(mod == 'w')
-				wrt.open(fName, std::ios::binary);
+			if(!strcmp(mod, "rd"))
+			{
+				stream.open(fName, std::ios::in | std::ios::binary);
+				return;
+			}
+			if(!strcmp(mod, "wt"))
+			{
+				stream.open(fName, std::ios::out | std::ios::binary);
+				return;
+			}
 			else
 				std::cout << "Unknown mode, \'r\' & \'w\' are known\n";
 		}
@@ -35,22 +40,34 @@ public:
 		}
 	}
 
-	void read(char * buf, unsigned int size)
+	bool read(char * buf, unsigned int size)
 	{
 		try
 		{
-			if(from.is_open())
+			if(stream.peek() != EOF)
 			{
-				from.read(buf, size);
-			}
-			else
-			{
-				not_open();
+				if(stream.is_open())
+				{
+					stream.read(buf, size);
+				}
+				else
+				{
+					not_open();
+				}
+				return 1;
 			}
 		}
 		catch(std::ifstream::failure fail)
 		{
-			std::cout << "An error occurred during file reading: " << fail.what() << std::endl;
+			if(!stream.fail())
+			{
+				return 0;
+			}
+			else
+			{
+				std::cout << "An error occurred during file reading: " << fail.what() << std::endl;
+				return 0;
+			}
 		}
 	}
 
@@ -58,9 +75,9 @@ public:
 	{
 		try
 		{
-			if(wrt.is_open())
+			if(stream.is_open())
 			{
-				wrt.write(buf, size);
+				stream.write(buf, size);
 			}
 			else
 			{
@@ -73,9 +90,38 @@ public:
 		}
 	}
 
+	void seekg(int pos, std::ios_base::seekdir way)
+	{
+		try
+		{
+			stream.seekg(pos, way);
+		}
+		catch(std::ifstream::failure fail)
+		{
+			std::cout << "An error occurred during seek_g: " << fail.what() << std::endl;
+		}
+	}
+
 	void close()
 	{
-		this->~File();
+		if(stream.is_open())
+		{
+			stream.close();
+			return;
+		}
+		not_open();
+	}
+
+	int peek()
+	{
+		return stream.peek();
+	}
+
+	bool good()
+	{
+		if(!stream.good())
+			return 0;
+		return 1;
 	}
 
 	void not_open()
@@ -83,15 +129,7 @@ public:
 		std::cout << "File wasnt open correctly\n";
 	}
 
-	~File()
-	{
-		if(from.is_open())
-			from.close();
-		if(wrt.is_open())
-			wrt.close();
-		else
-			not_open();
-	}
+	~FileHandler(){}
 };
 
 void swap(char* str, int size)
@@ -191,8 +229,7 @@ private:
 	myMap::iterator it;
 	FilesAndSize filesByEnd[2];
 	std::string outputFile, pcapFormat, headParts;
-	std::ofstream out;
-	std::ifstream f;
+	std::auto_ptr<FileHandler> f, out;
 
 	int gHeadSize, frHeadSize;
 	void create_dictionary();
@@ -202,8 +239,8 @@ private:
 public:
 	PcapMerger(std::vector<std::string> &files, int quantity, std::string output): outputFile(output), gHeadSize(24)
 	{
-		out.exceptions(std::ofstream::failbit | std::ofstream::badbit | std::ofstream::eofbit);
-		f.exceptions(std::ifstream::failbit | std::ifstream::badbit | std::ifstream::eofbit);
+		f = std::auto_ptr<FileHandler>(new FileHandler());
+		out = std::auto_ptr<FileHandler>(new FileHandler());
 		create_dictionary();
 		check_files(files, quantity);
 		merge_files();
@@ -230,12 +267,13 @@ void PcapMerger::check_files(std::vector<std::string> &files, int quantity)
 	char buf[4];
 	short mNumberLength = 4;
 	struct stat fstatus;
+
 	for(int i = 0; i < quantity; ++i)
 	{
 		try
 		{
-			f.open(files[i], std::ios::binary);
-			f.read(buf, mNumberLength);
+			f->open(files[i], "rd");
+			f->read(buf, mNumberLength);
 			swap(buf, 4);
 			val.set_ch(buf);
 			if(typesDict.count(val.get_int()) == 0)
@@ -256,13 +294,8 @@ void PcapMerger::check_files(std::vector<std::string> &files, int quantity)
 			filesByEnd[typesDict[val.get_int()]->subtype].files.insert(files[i]);
 			filesByEnd[typesDict[val.get_int()]->subtype].size += fstatus.st_size;
 		}
-		catch(std::ifstream::failure fail)
-		{
-			std::cout << "An error occurred during file opening/reading: " << fail.what() << std::endl;
-			term();
-		}
 		catch(MyException ex){}
-		f.close();
+		f->close();
 	}
 }
 
@@ -274,7 +307,7 @@ void PcapMerger::merge_files()
 	std::set<std::string>::iterator it = filesByEnd[form].files.begin();
 	try
 	{
-		out.open(outputFile, std::ios::binary);
+		out->open(outputFile, "wt");
 		add_to_file(*it, 0, form, 0);
 		++it;
 		for(it; it != filesByEnd[form].files.end(); ++it)
@@ -286,18 +319,13 @@ void PcapMerger::merge_files()
 			add_to_file(*it, 1, !form, 1);
 		}
 	}
-	catch(std::ifstream::failure fail)
-	{
-		std::cout << "An error occurred during working with file: " << fail.what() << std::endl;
-		term();
-	}
 	catch(MyException ex){}
-	out.close();
+	out->close();
 }
 
 void PcapMerger::add_to_file(const std::string& from, char pos, char form, char sw)
 {
-	int packetSize = 0, count = 0;
+	int packetSize = 0, count = 0, res = 1;
 	char *headerBuf, *packBuf;
 	HexAccess hack;
 	void (*mod_pckt_sz)(char *, int);
@@ -305,41 +333,36 @@ void PcapMerger::add_to_file(const std::string& from, char pos, char form, char 
 
 	mod_pckt_sz = (form == sw? swap: dummy);
 	mod_frm = (sw == 0? dummy_frame: swap_frame);
-	f.open(from, std::ios::binary);
+	f->open(from, "rd");
 
 	if(pos == 0)
 	{
 		headerBuf = new char[gHeadSize];
-		f.read(headerBuf, gHeadSize);
-		out.write(headerBuf, gHeadSize);
+		f->read(headerBuf, gHeadSize);
+		out->write(headerBuf, gHeadSize);
 		delete[] headerBuf;
 	}
 	else
-		f.seekg(gHeadSize, std::ios::beg);
+		f->seekg(gHeadSize, std::ios::beg);
 	headerBuf = new char[frHeadSize];
 
 	while(1)
 	{
-		try
-		{
-			f.read(headerBuf, frHeadSize);
-			mod_frm(headerBuf, frHeadSize, headParts);  
-			out.write(headerBuf, frHeadSize);
-
-			mod_pckt_sz(headerBuf + 8, 4);
-			hack.set_ch(headerBuf + 8);
-			packetSize = hack.get_int();
-			packBuf = new char[packetSize];
-			f.read(packBuf, packetSize);
-			out.write(packBuf, packetSize);
-			delete[] packBuf;
-		}
-		catch(std::ifstream::failure fail)
-		{
+		res = f->read(headerBuf, frHeadSize);
+		if(!res)
 			break;
-		}
+		mod_frm(headerBuf, frHeadSize, headParts);  
+		out->write(headerBuf, frHeadSize);
+
+		mod_pckt_sz(headerBuf + 8, 4);
+		hack.set_ch(headerBuf + 8);
+		packetSize = hack.get_int();
+		packBuf = new char[packetSize];
+		f->read(packBuf, packetSize);
+		out->write(packBuf, packetSize);
+		delete[] packBuf;
 	}
-	f.close();
+	f->close();
 	delete[] headerBuf;
 }
 
@@ -372,7 +395,6 @@ int main(int argc, char* argv[])
 		std::cout << "Using default output file name \"merged.pcap\"";
 		out = "merged.pcap";
 	}
-	
 	std::auto_ptr<PcapMerger> Mrg(new PcapMerger(files, cnt, out));
 	return 0;
 }
